@@ -6,6 +6,7 @@
 
 #define PORTI 8080
 #define BUFFER_SIZE 4096
+#define STATS_FILE "../shared/server_stats.txt"
 
 // Funksion për të dërguar përgjigje HTTP
 void dergo_pergjigje(int client_socket, const char *status, const char *content_type, const char *body) {
@@ -29,17 +30,28 @@ void handle_root(int client_socket) {
     dergo_pergjigje(client_socket, "200 OK", "text/plain", body);
 }
 
-// GET /stats (version me JSON statik)
+// GET /stats duke lexuar nga file
 void handle_stats(int client_socket) {
-    const char *json_body =
-        "{\n"
-        "  \"active_connections\": 0,\n"
-        "  \"client_ips\": [],\n"
-        "  \"message_count\": 0,\n"
-        "  \"messages\": []\n"
-        "}";
+    FILE *file = fopen(STATS_FILE, "r");
 
-    dergo_pergjigje(client_socket, "200 OK", "application/json", json_body);
+    if (file == NULL) {
+        const char *json_body =
+            "{\n"
+            "  \"active_connections\": 0,\n"
+            "  \"client_ips\": [],\n"
+            "  \"message_count\": 0,\n"
+            "  \"messages\": []\n"
+            "}";
+        dergo_pergjigje(client_socket, "200 OK", "application/json", json_body);
+        return;
+    }
+
+    char body[8192];
+    size_t total_read = fread(body, 1, sizeof(body) - 1, file);
+    body[total_read] = '\0';
+    fclose(file);
+
+    dergo_pergjigje(client_socket, "200 OK", "application/json", body);
 }
 
 // 404
