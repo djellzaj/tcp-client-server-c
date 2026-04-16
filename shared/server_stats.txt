@@ -1,0 +1,6 @@
+{
+  "active_connections": 0,
+  "client_ips": [],
+  "message_count": 0,
+  "messages": []
+}
