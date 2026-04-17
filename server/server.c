@@ -64,3 +64,34 @@ void checkTimeout(Client clients[]) {
         }
     }
 }
+int main() {
+    int server_fd;
+    struct sockaddr_in server_addr;
+
+    Client clients[MAX_CLIENTS];
+    initClients(clients);
+
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("Socket error");
+        return 1;
+    }
+
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind error");
+        return 1;
+    }
+
+    if (listen(server_fd, MAX_CLIENTS) < 0) {
+        perror("Listen error");
+        return 1;
+    }
+
+    printf("Server running on port %d\n", PORT);
