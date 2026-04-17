@@ -4,6 +4,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <time.h>
+#include <dirent.h>
 
 #define PORT 8080
 #define MAX_CLIENTS 5
@@ -63,6 +64,42 @@ void checkTimeout(Client clients[]) {
                 removeClient(clients, i);
             }
         }
+    }
+}
+
+void handle_list(SOCKET client_fd) {
+    DIR *dir = opendir("server_storage");
+    struct dirent *entry;
+    char response[4096] = "";
+
+    if (dir == NULL) {
+        char *msg = "ERROR: cannot open folder\n";
+        send(client_fd, msg, strlen(msg), 0);
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+            strcat(response, entry->d_name);
+            strcat(response, "\n");
+        }
+    }
+
+    closedir(dir);
+
+    if (strlen(response) == 0) {
+        strcpy(response, "No files found\n");
+    }
+
+    send(client_fd, response, strlen(response), 0);
+}
+
+void handle_command(SOCKET client_fd, char *buffer) {
+    if (strncmp(buffer, "/list", 5) == 0) {
+        handle_list(client_fd);
+    } else {
+        char *msg = "Unknown command\n";
+        send(client_fd, msg, strlen(msg), 0);
     }
 }
 
@@ -174,8 +211,7 @@ int main() {
                     printf("%s:%d -> %s\n", ip, port, buffer);
                     saveMessage(ip, port, buffer);
 
-                    char *reply = "OK\n";
-                    send(clients[i].fd, reply, (int)strlen(reply), 0);
+                    handle_command(clients[i].fd, buffer);
                 }
             }
         }
