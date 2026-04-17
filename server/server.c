@@ -142,3 +142,32 @@ int main() {
                 send(client_fd, msg, strlen(msg), 0);
             }
         }
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i].active && FD_ISSET(clients[i].fd, &fds)) {
+                char buffer[BUFFER_SIZE];
+                int bytes = recv(clients[i].fd, buffer, BUFFER_SIZE - 1, 0);
+
+                if (bytes <= 0) {
+                    removeClient(clients, i);
+                } else {
+                    buffer[bytes] = '\0';
+                    clients[i].last_active = time(NULL);
+
+                    char *ip = inet_ntoa(clients[i].addr.sin_addr);
+                    int port = ntohs(clients[i].addr.sin_port);
+
+                    printf("%s:%d -> %s\n", ip, port, buffer);
+                    saveMessage(ip, port, buffer);
+
+                    char *reply = "OK\n";
+                    send(clients[i].fd, reply, strlen(reply), 0);
+                }
+            }
+        }
+
+        checkTimeout(clients);
+    }
+
+    close(server_fd);
+    return 0;
+}
