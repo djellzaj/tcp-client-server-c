@@ -117,10 +117,17 @@ int main() {
             continue;
         }
 
+        // ✅ SHTIMI I RI: marrim IP-në e klientit
+        char *client_ip = inet_ntoa(client_addr.sin_addr);
+        printf("\nKlienti u lidh nga IP: %s\n", client_ip);
+
         memset(buffer, 0, sizeof(buffer));
         recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 
-        printf("\nKerkesa:\n%s\n", buffer);
+        // ✅ SHTIMI I RI: logim më i mirë
+        printf("\n--- Kerkese e re ---\n");
+        printf("IP: %s\n", client_ip);
+        printf("%s\n", buffer);
 
         handle_request(client_socket, buffer);
 
