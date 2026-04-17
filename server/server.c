@@ -18,3 +18,10 @@ typedef struct {
     time_t last_active;
     int active;
 } Client;
+void initClients(Client clients[]) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        clients[i].fd = -1;
+        clients[i].active = 0;
+        clients[i].last_active = 0;
+    }
+}
