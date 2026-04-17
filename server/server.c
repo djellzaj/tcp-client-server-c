@@ -94,14 +94,44 @@ void handle_list(SOCKET client_fd) {
     send(client_fd, response, strlen(response), 0);
 }
 
+void handle_read(SOCKET client_fd, char *filename) {
+    char path[512];
+    snprintf(path, sizeof(path), "server_storage/%s", filename);
+
+    FILE *f = fopen(path, "r");
+    if (f == NULL) {
+        char *msg = "ERROR: file not found\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    char response[4096];
+    size_t bytes_read = fread(response, 1, sizeof(response) - 1, f);
+    response[bytes_read] = '\0';
+
+    fclose(f);
+
+    if (bytes_read == 0) {
+        strcpy(response, "File is empty\n");
+    }
+
+    send(client_fd, response, (int)strlen(response), 0);
+}
+
+
 void handle_command(SOCKET client_fd, char *buffer) {
     if (strncmp(buffer, "/list", 5) == 0) {
         handle_list(client_fd);
+    } else if (strncmp(buffer, "/read ", 6) == 0) {
+        char *filename = buffer + 6;
+        filename[strcspn(filename, "\r\n")] = 0;
+        handle_read(client_fd, filename);
     } else {
         char *msg = "Unknown command\n";
-        send(client_fd, msg, strlen(msg), 0);
+        send(client_fd, msg, (int)strlen(msg), 0);
     }
 }
+
 
 int main() {
     WSADATA wsa;
