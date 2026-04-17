@@ -37,3 +37,30 @@ int addClient(Client clients[], int fd, struct sockaddr_in addr) {
     }
     return -1;
 }
+void removeClient(Client clients[], int i) {
+    close(clients[i].fd);
+    clients[i].fd = -1;
+    clients[i].active = 0;
+}
+
+void saveMessage(char *ip, int port, char *msg) {
+    FILE *f = fopen("messages.txt", "a");
+    if (f != NULL) {
+        fprintf(f, "%s:%d -> %s\n", ip, port, msg);
+        fclose(f);
+    }
+}
+
+void checkTimeout(Client clients[]) {
+    time_t now = time(NULL);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].active) {
+            if (now - clients[i].last_active > TIMEOUT) {
+                char *ip = inet_ntoa(clients[i].addr.sin_addr);
+                int port = ntohs(clients[i].addr.sin_port);
+                printf("Timeout: %s:%d\n", ip, port);
+                removeClient(clients, i);
+            }
+        }
+    }
+}
