@@ -95,3 +95,50 @@ int main() {
     }
 
     printf("Server running on port %d\n", PORT);
+    while (1) {
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(server_fd, &fds);
+
+        int max_fd = server_fd;
+
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i].active) {
+                FD_SET(clients[i].fd, &fds);
+                if (clients[i].fd > max_fd) {
+                    max_fd = clients[i].fd;
+                }
+            }
+        }
+
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+
+        int activity = select(max_fd + 1, &fds, NULL, NULL, &tv);
+        if (activity < 0) {
+            perror("Select error");
+            continue;
+        }
+
+        if (FD_ISSET(server_fd, &fds)) {
+            struct sockaddr_in client_addr;
+            socklen_t len = sizeof(client_addr);
+
+            int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &len);
+            if (client_fd < 0) {
+                perror("Accept error");
+                continue;
+            }
+
+            int idx = addClient(clients, client_fd, client_addr);
+
+            if (idx == -1) {
+                char *msg = "Server full\n";
+                send(client_fd, msg, strlen(msg), 0);
+                close(client_fd);
+            } else {
+                char *msg = "Connected\n";
+                send(client_fd, msg, strlen(msg), 0);
+            }
+        }
