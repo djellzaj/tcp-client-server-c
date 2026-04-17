@@ -25,3 +25,15 @@ void initClients(Client clients[]) {
         clients[i].last_active = 0;
     }
 }
+int addClient(Client clients[], int fd, struct sockaddr_in addr) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (!clients[i].active) {
+            clients[i].fd = fd;
+            clients[i].addr = addr;
+            clients[i].last_active = time(NULL);
+            clients[i].active = 1;
+            return i;
+        }
+    }
+    return -1;
+}
