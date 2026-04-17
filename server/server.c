@@ -1,10 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <sys/select.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <time.h>
 
 #define PORT 8080
@@ -13,19 +11,21 @@
 #define TIMEOUT 30
 
 typedef struct {
-    int fd;
+    SOCKET fd;
     struct sockaddr_in addr;
     time_t last_active;
     int active;
 } Client;
+
 void initClients(Client clients[]) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        clients[i].fd = -1;
+        clients[i].fd = INVALID_SOCKET;
         clients[i].active = 0;
         clients[i].last_active = 0;
     }
 }
-int addClient(Client clients[], int fd, struct sockaddr_in addr) {
+
+int addClient(Client clients[], SOCKET fd, struct sockaddr_in addr) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (!clients[i].active) {
             clients[i].fd = fd;
@@ -37,9 +37,10 @@ int addClient(Client clients[], int fd, struct sockaddr_in addr) {
     }
     return -1;
 }
+
 void removeClient(Client clients[], int i) {
-    close(clients[i].fd);
-    clients[i].fd = -1;
+    closesocket(clients[i].fd);
+    clients[i].fd = INVALID_SOCKET;
     clients[i].active = 0;
 }
 
@@ -64,43 +65,56 @@ void checkTimeout(Client clients[]) {
         }
     }
 }
+
 int main() {
-    int server_fd;
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        printf("WSAStartup failed\n");
+        return 1;
+    }
+
+    SOCKET server_fd;
     struct sockaddr_in server_addr;
 
     Client clients[MAX_CLIENTS];
     initClients(clients);
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
-        perror("Socket error");
+    if (server_fd == INVALID_SOCKET) {
+        printf("Socket error\n");
+        WSACleanup();
         return 1;
     }
 
     int opt = 1;
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Bind error");
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+        printf("Bind error\n");
+        closesocket(server_fd);
+        WSACleanup();
         return 1;
     }
 
-    if (listen(server_fd, MAX_CLIENTS) < 0) {
-        perror("Listen error");
+    if (listen(server_fd, MAX_CLIENTS) == SOCKET_ERROR) {
+        printf("Listen error\n");
+        closesocket(server_fd);
+        WSACleanup();
         return 1;
     }
 
     printf("Server running on port %d\n", PORT);
+
     while (1) {
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(server_fd, &fds);
 
-        int max_fd = server_fd;
+        SOCKET max_fd = server_fd;
 
         for (int i = 0; i < MAX_CLIENTS; i++) {
             if (clients[i].active) {
@@ -115,19 +129,19 @@ int main() {
         tv.tv_sec = 1;
         tv.tv_usec = 0;
 
-        int activity = select(max_fd + 1, &fds, NULL, NULL, &tv);
-        if (activity < 0) {
-            perror("Select error");
+        int activity = select((int)max_fd + 1, &fds, NULL, NULL, &tv);
+        if (activity == SOCKET_ERROR) {
+            printf("Select error\n");
             continue;
         }
 
         if (FD_ISSET(server_fd, &fds)) {
             struct sockaddr_in client_addr;
-            socklen_t len = sizeof(client_addr);
+            int len = sizeof(client_addr);
 
-            int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &len);
-            if (client_fd < 0) {
-                perror("Accept error");
+            SOCKET client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &len);
+            if (client_fd == INVALID_SOCKET) {
+                printf("Accept error\n");
                 continue;
             }
 
@@ -135,13 +149,14 @@ int main() {
 
             if (idx == -1) {
                 char *msg = "Server full\n";
-                send(client_fd, msg, strlen(msg), 0);
-                close(client_fd);
+                send(client_fd, msg, (int)strlen(msg), 0);
+                closesocket(client_fd);
             } else {
                 char *msg = "Connected\n";
-                send(client_fd, msg, strlen(msg), 0);
+                send(client_fd, msg, (int)strlen(msg), 0);
             }
         }
+
         for (int i = 0; i < MAX_CLIENTS; i++) {
             if (clients[i].active && FD_ISSET(clients[i].fd, &fds)) {
                 char buffer[BUFFER_SIZE];
@@ -160,7 +175,7 @@ int main() {
                     saveMessage(ip, port, buffer);
 
                     char *reply = "OK\n";
-                    send(clients[i].fd, reply, strlen(reply), 0);
+                    send(clients[i].fd, reply, (int)strlen(reply), 0);
                 }
             }
         }
@@ -168,6 +183,7 @@ int main() {
         checkTimeout(clients);
     }
 
-    close(server_fd);
+    closesocket(server_fd);
+    WSACleanup();
     return 0;
 }
