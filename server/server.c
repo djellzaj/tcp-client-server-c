@@ -42,3 +42,10 @@ void removeClient(Client clients[], int i) {
     clients[i].fd = -1;
     clients[i].active = 0;
 }
+void saveMessage(char *ip, int port, char *msg) {
+    FILE *f = fopen("messages.txt", "a");
+    if (f != NULL) {
+        fprintf(f, "%s:%d -> %s\n", ip, port, msg);
+        fclose(f);
+    }
+}
