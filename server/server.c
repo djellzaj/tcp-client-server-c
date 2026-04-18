@@ -318,9 +318,14 @@ int main() {
                 send(client_fd, msg, (int)strlen(msg), 0);
                 closesocket(client_fd);
             } else {
-                char *msg = "Connected\n";
-                send(client_fd, msg, (int)strlen(msg), 0);
-            }
+    if (clients[idx].is_admin) {
+        char *msg = "Connected as ADMIN\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+    } else {
+        char *msg = "Connected as USER\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+    }
+}
         }
 
         for (int i = 0; i < MAX_CLIENTS; i++) {
