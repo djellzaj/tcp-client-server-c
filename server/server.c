@@ -11,6 +11,8 @@
 #define MAX_CLIENTS 5
 #define BUFFER_SIZE 1024
 #define TIMEOUT 30
+#define USER_DELAY_MS 200
+
 int admin_assigned = 0;
 
 typedef struct {
@@ -580,6 +582,10 @@ int main() {
 
                     printf("%s:%d -> %s\n", ip, port, buffer);
                     saveMessage(ip, port, buffer);
+
+                    if (!clients[i].is_admin) {
+                        Sleep(USER_DELAY_MS);
+                    }
 
                     handle_command(&clients[i], buffer);
                 }
