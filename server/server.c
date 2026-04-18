@@ -74,7 +74,7 @@ void handle_list(SOCKET client_fd) {
 
     if (dir == NULL) {
         char *msg = "ERROR: cannot open folder\n";
-        send(client_fd, msg, strlen(msg), 0);
+        send(client_fd, msg, (int)strlen(msg), 0);
         return;
     }
 
@@ -91,7 +91,7 @@ void handle_list(SOCKET client_fd) {
         strcpy(response, "No files found\n");
     }
 
-    send(client_fd, response, strlen(response), 0);
+    send(client_fd, response, (int)strlen(response), 0);
 }
 
 void handle_read(SOCKET client_fd, char *filename) {
@@ -118,6 +118,34 @@ void handle_read(SOCKET client_fd, char *filename) {
     send(client_fd, response, (int)strlen(response), 0);
 }
 
+void handle_search(SOCKET client_fd, char *keyword) {
+    DIR *dir = opendir("server_storage");
+    struct dirent *entry;
+    char response[4096] = "";
+
+    if (dir == NULL) {
+        char *msg = "ERROR: cannot open folder\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") != 0 &&
+            strcmp(entry->d_name, "..") != 0 &&
+            strstr(entry->d_name, keyword) != NULL) {
+            strcat(response, entry->d_name);
+            strcat(response, "\n");
+        }
+    }
+
+    closedir(dir);
+
+    if (strlen(response) == 0) {
+        strcpy(response, "No matching files\n");
+    }
+
+    send(client_fd, response, (int)strlen(response), 0);
+}
 
 void handle_command(SOCKET client_fd, char *buffer) {
     if (strncmp(buffer, "/list", 5) == 0) {
@@ -126,12 +154,15 @@ void handle_command(SOCKET client_fd, char *buffer) {
         char *filename = buffer + 6;
         filename[strcspn(filename, "\r\n")] = 0;
         handle_read(client_fd, filename);
+    } else if (strncmp(buffer, "/search ", 8) == 0) {
+        char *keyword = buffer + 8;
+        keyword[strcspn(keyword, "\r\n")] = 0;
+        handle_search(client_fd, keyword);
     } else {
         char *msg = "Unknown command\n";
         send(client_fd, msg, (int)strlen(msg), 0);
     }
 }
-
 
 int main() {
     WSADATA wsa;
