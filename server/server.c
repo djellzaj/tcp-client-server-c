@@ -122,6 +122,26 @@ int is_admin_command(const char *buffer) {
            strncmp(buffer, "/download ", 10) == 0;
 }
 
+int is_valid_filename(const char *filename) {
+    if (filename == NULL || filename[0] == '\0') {
+        return 0;
+    }
+
+    if (strstr(filename, "..") != NULL) {
+        return 0;
+    }
+
+    if (strchr(filename, '/') != NULL || strchr(filename, '\\') != NULL) {
+        return 0;
+    }
+
+    if (strchr(filename, ':') != NULL) {
+        return 0;
+    }
+
+    return 1;
+}
+
 void handle_list(SOCKET client_fd) {
     DIR *dir = opendir("server_storage");
     struct dirent *entry;
@@ -159,6 +179,12 @@ void handle_list(SOCKET client_fd) {
 }
 
 void handle_read(SOCKET client_fd, char *filename) {
+    if (!is_valid_filename(filename)) {
+        char *msg = "ERROR: invalid filename\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
     char path[512];
     snprintf(path, sizeof(path), "server_storage/%s", filename);
 
@@ -229,6 +255,12 @@ void handle_search(SOCKET client_fd, char *keyword) {
 }
 
 void handle_info(SOCKET client_fd, char *filename) {
+    if (!is_valid_filename(filename)) {
+        char *msg = "ERROR: invalid filename\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
     char path[512];
     snprintf(path, sizeof(path), "server_storage/%s", filename);
 
@@ -252,6 +284,12 @@ void handle_info(SOCKET client_fd, char *filename) {
 }
 
 void handle_delete(SOCKET client_fd, char *filename) {
+    if (!is_valid_filename(filename)) {
+        char *msg = "ERROR: invalid filename\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
     char path[512];
     snprintf(path, sizeof(path), "server_storage/%s", filename);
 
@@ -267,6 +305,12 @@ void handle_delete(SOCKET client_fd, char *filename) {
 void handle_upload(Client *client, char *filename, int filesize) {
     if (!client->is_admin) {
         char *msg = "ERROR: permission denied\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    if (!is_valid_filename(filename)) {
+        char *msg = "ERROR: invalid filename\n";
         send(client->fd, msg, (int)strlen(msg), 0);
         return;
     }
@@ -319,6 +363,12 @@ void handle_upload(Client *client, char *filename, int filesize) {
 void handle_download(Client *client, char *filename) {
     if (!client->is_admin) {
         char *msg = "ERROR: permission denied\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    if (!is_valid_filename(filename)) {
+        char *msg = "ERROR: invalid filename\n";
         send(client->fd, msg, (int)strlen(msg), 0);
         return;
     }
