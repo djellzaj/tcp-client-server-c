@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <time.h>
 #include <dirent.h>
+#include <direct.h>
 #include <sys/stat.h>
 
 #define SERVER_IP "0.0.0.0"
@@ -31,6 +32,18 @@ void initClients(Client clients[]) {
         clients[i].active = 0;
         clients[i].last_active = 0;
         clients[i].is_admin = 0;
+    }
+}
+
+void ensure_server_storage() {
+    struct stat st = {0};
+
+    if (stat("server_storage", &st) == -1) {
+        if (_mkdir("server_storage") == 0) {
+            printf("server_storage folder created\n");
+        } else {
+            printf("ERROR: could not create server_storage folder\n");
+        }
     }
 }
 
@@ -535,6 +548,7 @@ int main() {
 
     Client clients[MAX_CLIENTS];
     initClients(clients);
+    ensure_server_storage();
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == INVALID_SOCKET) {
