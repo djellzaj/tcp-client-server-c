@@ -5,6 +5,7 @@
 #include <ws2tcpip.h>
 #include <time.h>
 #include <dirent.h>
+#include <sys/stat.h>
 
 #define PORT 8080
 #define MAX_CLIENTS 5
@@ -147,6 +148,29 @@ void handle_search(SOCKET client_fd, char *keyword) {
     send(client_fd, response, (int)strlen(response), 0);
 }
 
+void handle_info(SOCKET client_fd, char *filename) {
+    char path[512];
+    snprintf(path, sizeof(path), "server_storage/%s", filename);
+
+    struct stat file_stat;
+    if (stat(path, &file_stat) != 0) {
+        char *msg = "ERROR: file not found\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    char response[1024];
+    char *time_str = ctime(&file_stat.st_mtime);
+
+    snprintf(response, sizeof(response),
+             "Filename: %s\nSize: %lld bytes\nLast modified: %s",
+             filename,
+             (long long)file_stat.st_size,
+             time_str);
+
+    send(client_fd, response, (int)strlen(response), 0);
+}
+
 void handle_command(SOCKET client_fd, char *buffer) {
     if (strncmp(buffer, "/list", 5) == 0) {
         handle_list(client_fd);
@@ -158,7 +182,13 @@ void handle_command(SOCKET client_fd, char *buffer) {
         char *keyword = buffer + 8;
         keyword[strcspn(keyword, "\r\n")] = 0;
         handle_search(client_fd, keyword);
-    } else {
+    } 
+    else if (strncmp(buffer, "/info ", 6) == 0) {
+    char *filename = buffer + 6;
+    filename[strcspn(filename, "\r\n")] = 0;
+    handle_info(client_fd, filename);
+}
+else {
         char *msg = "Unknown command\n";
         send(client_fd, msg, (int)strlen(msg), 0);
     }
