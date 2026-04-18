@@ -109,6 +109,19 @@ int recv_all(SOCKET sock, char *buffer, int length) {
     return total_received;
 }
 
+int is_read_only_command(const char *buffer) {
+    return strncmp(buffer, "/list", 5) == 0 ||
+           strncmp(buffer, "/read ", 6) == 0 ||
+           strncmp(buffer, "/search ", 8) == 0 ||
+           strncmp(buffer, "/info ", 6) == 0;
+}
+
+int is_admin_command(const char *buffer) {
+    return strncmp(buffer, "/delete ", 8) == 0 ||
+           strncmp(buffer, "/upload ", 8) == 0 ||
+           strncmp(buffer, "/download ", 10) == 0;
+}
+
 void handle_list(SOCKET client_fd) {
     DIR *dir = opendir("server_storage");
     struct dirent *entry;
@@ -327,6 +340,12 @@ void handle_download(Client *client, char *filename) {
 }
 
 void handle_command(Client *client, char *buffer) {
+    if (is_admin_command(buffer) && !client->is_admin) {
+        char *msg = "ERROR: permission denied\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
     if (strncmp(buffer, "/list", 5) == 0) {
         handle_list(client->fd);
 
@@ -348,13 +367,7 @@ void handle_command(Client *client, char *buffer) {
     } else if (strncmp(buffer, "/delete ", 8) == 0) {
         char *filename = buffer + 8;
         filename[strcspn(filename, "\r\n")] = 0;
-
-        if (!client->is_admin) {
-            char *msg = "ERROR: permission denied\n";
-            send(client->fd, msg, (int)strlen(msg), 0);
-        } else {
-            handle_delete(client->fd, filename);
-        }
+        handle_delete(client->fd, filename);
 
     } else if (strncmp(buffer, "/upload ", 8) == 0) {
         char filename[256];
