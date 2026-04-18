@@ -125,7 +125,10 @@ int is_admin_command(const char *buffer) {
 void handle_list(SOCKET client_fd) {
     DIR *dir = opendir("server_storage");
     struct dirent *entry;
-    char response[4096] = "";
+    char response[4096];
+    int offset = 0;
+
+    response[0] = '\0';
 
     if (dir == NULL) {
         char *msg = "ERROR: cannot open folder\n";
@@ -135,14 +138,20 @@ void handle_list(SOCKET client_fd) {
 
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
-            strcat(response, entry->d_name);
-            strcat(response, "\n");
+            int written = snprintf(response + offset, sizeof(response) - offset,
+                                   "%s\n", entry->d_name);
+
+            if (written < 0 || written >= (int)(sizeof(response) - offset)) {
+                break;
+            }
+
+            offset += written;
         }
     }
 
     closedir(dir);
 
-    if (strlen(response) == 0) {
+    if (offset == 0) {
         strcpy(response, "No files found\n");
     }
 
@@ -183,7 +192,10 @@ void handle_read(SOCKET client_fd, char *filename) {
 void handle_search(SOCKET client_fd, char *keyword) {
     DIR *dir = opendir("server_storage");
     struct dirent *entry;
-    char response[4096] = "";
+    char response[4096];
+    int offset = 0;
+
+    response[0] = '\0';
 
     if (dir == NULL) {
         char *msg = "ERROR: cannot open folder\n";
@@ -195,14 +207,21 @@ void handle_search(SOCKET client_fd, char *keyword) {
         if (strcmp(entry->d_name, ".") != 0 &&
             strcmp(entry->d_name, "..") != 0 &&
             strstr(entry->d_name, keyword) != NULL) {
-            strcat(response, entry->d_name);
-            strcat(response, "\n");
+
+            int written = snprintf(response + offset, sizeof(response) - offset,
+                                   "%s\n", entry->d_name);
+
+            if (written < 0 || written >= (int)(sizeof(response) - offset)) {
+                break;
+            }
+
+            offset += written;
         }
     }
 
     closedir(dir);
 
-    if (strlen(response) == 0) {
+    if (offset == 0) {
         strcpy(response, "No matching files\n");
     }
 
