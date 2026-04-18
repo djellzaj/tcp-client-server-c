@@ -500,8 +500,18 @@ void handle_download(Client *client, char *filename) {
 }
 
 void handle_text_message(Client *client, char *buffer) {
-    char *msg = "Message received\n";
-    send(client->fd, msg, (int)strlen(msg), 0);
+    char response[256];
+    buffer[strcspn(buffer, "\r\n")] = 0;
+
+    snprintf(
+        response,
+        sizeof(response),
+        "Server received your message as %s: %s\n",
+        client->is_admin ? "ADMIN" : "USER",
+        buffer
+    );
+
+    send(client->fd, response, (int)strlen(response), 0);
 }
 
 void handle_command(Client *client, char *buffer) {
