@@ -79,6 +79,30 @@ void checkTimeout(Client clients[]) {
     }
 }
 
+int send_all(SOCKET sock, const char *data, int length) {
+    int total_sent = 0;
+    while (total_sent < length) {
+        int sent = send(sock, data + total_sent, length - total_sent, 0);
+        if (sent == SOCKET_ERROR || sent == 0) {
+            return -1;
+        }
+        total_sent += sent;
+    }
+    return total_sent;
+}
+
+int recv_all(SOCKET sock, char *buffer, int length) {
+    int total_received = 0;
+    while (total_received < length) {
+        int received = recv(sock, buffer + total_received, length - total_received, 0);
+        if (received <= 0) {
+            return -1;
+        }
+        total_received += received;
+    }
+    return total_received;
+}
+
 void handle_list(SOCKET client_fd) {
     DIR *dir = opendir("server_storage");
     struct dirent *entry;
@@ -195,8 +219,108 @@ void handle_delete(SOCKET client_fd, char *filename) {
     }
 }
 
-void handle_command(Client *client, char *buffer) {
+void handle_upload(Client *client, char *filename, int filesize) {
+    if (!client->is_admin) {
+        char *msg = "ERROR: permission denied\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
 
+    if (filesize <= 0) {
+        char *msg = "ERROR: invalid file size\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    char path[512];
+    snprintf(path, sizeof(path), "server_storage/%s", filename);
+
+    FILE *f = fopen(path, "wb");
+    if (f == NULL) {
+        char *msg = "ERROR: cannot create file\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    char *ready = "READY\n";
+    send(client->fd, ready, (int)strlen(ready), 0);
+
+    char buffer[BUFFER_SIZE];
+    int remaining = filesize;
+
+    while (remaining > 0) {
+        int chunk = (remaining > BUFFER_SIZE) ? BUFFER_SIZE : remaining;
+        int received = recv(client->fd, buffer, chunk, 0);
+
+        if (received <= 0) {
+            fclose(f);
+            remove(path); // fshi file-in e papërfunduar
+            char *msg = "ERROR: upload interrupted\n";
+            send(client->fd, msg, (int)strlen(msg), 0);
+            return;
+        }
+
+        fwrite(buffer, 1, received, f);
+        remaining -= received;
+        client->last_active = time(NULL);
+    }
+
+    fclose(f);
+
+    char *msg = "Upload successful\n";
+    send(client->fd, msg, (int)strlen(msg), 0);
+}
+
+void handle_download(Client *client, char *filename) {
+    if (!client->is_admin) {
+        char *msg = "ERROR: permission denied\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    char path[512];
+    snprintf(path, sizeof(path), "server_storage/%s", filename);
+
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) {
+        char *msg = "ERROR: file not found\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long filesize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (filesize < 0) {
+        fclose(f);
+        char *msg = "ERROR: could not read file size\n";
+        send(client->fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    char header[256];
+    snprintf(header, sizeof(header), "FILE %s %ld\n", filename, filesize);
+
+    if (send_all(client->fd, header, (int)strlen(header)) == -1) {
+        fclose(f);
+        return;
+    }
+
+    char buffer[BUFFER_SIZE];
+    size_t bytes_read;
+
+    while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, f)) > 0) {
+        if (send_all(client->fd, buffer, (int)bytes_read) == -1) {
+            fclose(f);
+            return;
+        }
+    }
+
+    fclose(f);
+}
+
+void handle_command(Client *client, char *buffer) {
     if (strncmp(buffer, "/list", 5) == 0) {
         handle_list(client->fd);
 
@@ -225,6 +349,23 @@ void handle_command(Client *client, char *buffer) {
         } else {
             handle_delete(client->fd, filename);
         }
+
+    } else if (strncmp(buffer, "/upload ", 8) == 0) {
+        char filename[256];
+        int filesize;
+
+        if (sscanf(buffer + 8, "%255s %d", filename, &filesize) != 2) {
+            char *msg = "ERROR: usage /upload <filename> <filesize>\n";
+            send(client->fd, msg, (int)strlen(msg), 0);
+            return;
+        }
+
+        handle_upload(client, filename, filesize);
+
+    } else if (strncmp(buffer, "/download ", 10) == 0) {
+        char *filename = buffer + 10;
+        filename[strcspn(filename, "\r\n")] = 0;
+        handle_download(client, filename);
 
     } else {
         char *msg = "Unknown command\n";
