@@ -37,3 +37,8 @@ int addClient(Client clients[], int fd, struct sockaddr_in addr) {
     }
     return -1;
 }
+void removeClient(Client clients[], int i) {
+    close(clients[i].fd);
+    clients[i].fd = -1;
+    clients[i].active = 0;
+}
