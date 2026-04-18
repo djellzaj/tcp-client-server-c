@@ -3,6 +3,7 @@
 #include <string.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
 #include <time.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -278,14 +279,56 @@ void handle_info(SOCKET client_fd, char *filename) {
         return;
     }
 
-    char response[1024];
-    char *time_str = ctime(&file_stat.st_mtime);
+    HANDLE hFile = CreateFileA(
+        path,
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
 
-    snprintf(response, sizeof(response),
-             "Filename: %s\nSize: %lld bytes\nLast modified: %s",
-             filename,
-             (long long)file_stat.st_size,
-             time_str);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        char *msg = "ERROR: could not open file info\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    FILETIME ftCreateUTC, ftAccessUTC, ftWriteUTC;
+    if (!GetFileTime(hFile, &ftCreateUTC, &ftAccessUTC, &ftWriteUTC)) {
+        CloseHandle(hFile);
+        char *msg = "ERROR: could not get file time\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+        return;
+    }
+
+    CloseHandle(hFile);
+
+    FILETIME ftCreateLocal, ftWriteLocal;
+    SYSTEMTIME stCreateLocal, stWriteLocal;
+
+    FileTimeToLocalFileTime(&ftCreateUTC, &ftCreateLocal);
+    FileTimeToSystemTime(&ftCreateLocal, &stCreateLocal);
+
+    FileTimeToLocalFileTime(&ftWriteUTC, &ftWriteLocal);
+    FileTimeToSystemTime(&ftWriteLocal, &stWriteLocal);
+
+    char response[1024];
+    snprintf(
+        response,
+        sizeof(response),
+        "Filename: %s\n"
+        "Size: %lld bytes\n"
+        "Created: %02d-%02d-%04d %02d:%02d:%02d\n"
+        "Last modified: %02d-%02d-%04d %02d:%02d:%02d\n",
+        filename,
+        (long long)file_stat.st_size,
+        stCreateLocal.wDay, stCreateLocal.wMonth, stCreateLocal.wYear,
+        stCreateLocal.wHour, stCreateLocal.wMinute, stCreateLocal.wSecond,
+        stWriteLocal.wDay, stWriteLocal.wMonth, stWriteLocal.wYear,
+        stWriteLocal.wHour, stWriteLocal.wMinute, stWriteLocal.wSecond
+    );
 
     send(client_fd, response, (int)strlen(response), 0);
 }
