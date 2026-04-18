@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
+#define SERVER_IP "0.0.0.0"
 #define PORT 8080
 #define MAX_CLIENTS 5
 #define BUFFER_SIZE 1024
@@ -494,8 +495,14 @@ int main() {
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
+
+    if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
+        printf("Invalid IP address\n");
+        closesocket(server_fd);
+        WSACleanup();
+        return 1;
+    }
 
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
         printf("Bind error\n");
