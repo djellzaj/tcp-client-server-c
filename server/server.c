@@ -83,7 +83,28 @@ void removeClient(Client clients[], int i) {
 void saveMessage(char *ip, int port, char *role, char *msg) {
     FILE *f = fopen("messages.txt", "a");
     if (f != NULL) {
-        fprintf(f, "[%s] %s:%d -> %s\n", role, ip, port, msg);
+        time_t now = time(NULL);
+        struct tm *t = localtime(&now);
+
+        if (t != NULL) {
+            fprintf(
+                f,
+                "[%02d-%02d-%04d %02d:%02d:%02d] [%s] %s:%d -> %s\n",
+                t->tm_mday,
+                t->tm_mon + 1,
+                t->tm_year + 1900,
+                t->tm_hour,
+                t->tm_min,
+                t->tm_sec,
+                role,
+                ip,
+                port,
+                msg
+            );
+        } else {
+            fprintf(f, "[unknown-time] [%s] %s:%d -> %s\n", role, ip, port, msg);
+        }
+
         fclose(f);
     }
 }
