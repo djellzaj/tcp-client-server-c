@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# runtime files
+messages.txt
+
+# server storage files
+server/server_storage/*
