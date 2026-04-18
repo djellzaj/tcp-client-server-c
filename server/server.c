@@ -125,6 +125,10 @@ int is_admin_command(const char *buffer) {
            strncmp(buffer, "/download ", 10) == 0;
 }
 
+int is_command(const char *buffer) {
+    return buffer[0] == '/';
+}
+
 int is_valid_filename(const char *filename) {
     if (filename == NULL || filename[0] == '\0') {
         return 0;
@@ -418,6 +422,11 @@ void handle_download(Client *client, char *filename) {
     fclose(f);
 }
 
+void handle_text_message(Client *client, char *buffer) {
+    char *msg = "Message received\n";
+    send(client->fd, msg, (int)strlen(msg), 0);
+}
+
 void handle_command(Client *client, char *buffer) {
     if (is_admin_command(buffer) && !client->is_admin) {
         char *msg = "ERROR: permission denied\n";
@@ -587,14 +596,18 @@ int main() {
                     char *ip = inet_ntoa(clients[i].addr.sin_addr);
                     int port = ntohs(clients[i].addr.sin_port);
 
-                    printf("%s:%d -> %s\n", ip, port, buffer);
+                  printf("%s:%d -> %s\n", ip, port, buffer);
                     saveMessage(ip, port, buffer);
 
                     if (!clients[i].is_admin) {
                         Sleep(USER_DELAY_MS);
                     }
 
-                    handle_command(&clients[i], buffer);
+                    if (is_command(buffer)) {
+                        handle_command(&clients[i], buffer);
+                    } else {
+                        handle_text_message(&clients[i], buffer);
+                    }
                 }
             }
         }
