@@ -82,3 +82,17 @@ int main() {
     listen(server_fd, MAX_CLIENTS);
 
     printf("Server running on port %d\n", PORT);
+     while (1) {
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(server_fd, &fds);
+
+        int max_fd = server_fd;
+
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i].active) {
+                FD_SET(clients[i].fd, &fds);
+                if (clients[i].fd > max_fd)
+                    max_fd = clients[i].fd;
+            }
+        }
