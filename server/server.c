@@ -96,3 +96,12 @@ int main() {
                     max_fd = clients[i].fd;
             }
         }
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+
+        select(max_fd + 1, &fds, NULL, NULL, &tv);
+
+        if (FD_ISSET(server_fd, &fds)) {
+            len = sizeof(client_addr);
+            client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &len);
