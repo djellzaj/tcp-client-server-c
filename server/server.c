@@ -105,3 +105,25 @@ int main() {
         if (FD_ISSET(server_fd, &fds)) {
             len = sizeof(client_addr);
             client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &len);
+             int idx = addClient(clients, client_fd, client_addr);
+
+            char *ip = inet_ntoa(client_addr.sin_addr);
+            int port = ntohs(client_addr.sin_port);
+
+            if (idx == -1) {
+                char *msg = "Server full\n";
+                send(client_fd, msg, strlen(msg), 0);
+                close(client_fd);
+            } else {
+                char *msg = "Connected\n";
+                send(client_fd, msg, strlen(msg), 0);
+                printf("Client connected: %s:%d\n", ip, port);
+            }
+        }
+
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i].active && FD_ISSET(clients[i].fd, &fds)) {
+                char buffer[BUFFER_SIZE];
+                int bytes = recv(clients[i].fd, buffer, BUFFER_SIZE - 1, 0);
+
+                if (bytes <= 0) {
