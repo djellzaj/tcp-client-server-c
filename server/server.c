@@ -52,9 +52,15 @@ int addClient(Client clients[], SOCKET fd, struct sockaddr_in addr) {
 }
 
 void removeClient(Client clients[], int i) {
+    if (clients[i].is_admin) {
+        admin_assigned = 0;
+    }
+
     closesocket(clients[i].fd);
     clients[i].fd = INVALID_SOCKET;
     clients[i].active = 0;
+    clients[i].last_active = 0;
+    clients[i].is_admin = 0;
 }
 
 void saveMessage(char *ip, int port, char *msg) {
