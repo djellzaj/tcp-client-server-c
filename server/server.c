@@ -136,3 +136,17 @@ int main() {
                     int port = ntohs(clients[i].addr.sin_port);
 
                     printf("%s:%d -> %s\n", ip, port, buffer);
+                    saveMessage(ip, port, buffer);
+
+                    char *reply = "OK\n";
+                    send(clients[i].fd, reply, strlen(reply), 0);
+                }
+            }
+        }
+
+        checkTimeout(clients);
+    }
+
+    close(server_fd);
+    return 0;
+}
