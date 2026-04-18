@@ -11,12 +11,14 @@
 #define MAX_CLIENTS 5
 #define BUFFER_SIZE 1024
 #define TIMEOUT 30
+int admin_assigned = 0;
 
 typedef struct {
     SOCKET fd;
     struct sockaddr_in addr;
     time_t last_active;
     int active;
+    int is_admin;
 } Client;
 
 void initClients(Client clients[]) {
@@ -24,6 +26,7 @@ void initClients(Client clients[]) {
         clients[i].fd = INVALID_SOCKET;
         clients[i].active = 0;
         clients[i].last_active = 0;
+        clients[i].is_admin = 0;
     }
 }
 
@@ -34,6 +37,14 @@ int addClient(Client clients[], SOCKET fd, struct sockaddr_in addr) {
             clients[i].addr = addr;
             clients[i].last_active = time(NULL);
             clients[i].active = 1;
+
+            if (admin_assigned == 0) {
+                clients[i].is_admin = 1;
+                admin_assigned = 1;
+            } else {
+                clients[i].is_admin = 0;
+            }
+
             return i;
         }
     }
@@ -184,29 +195,40 @@ void handle_delete(SOCKET client_fd, char *filename) {
     }
 }
 
-void handle_command(SOCKET client_fd, char *buffer) {
+void handle_command(Client *client, char *buffer) {
+
     if (strncmp(buffer, "/list", 5) == 0) {
-        handle_list(client_fd);
+        handle_list(client->fd);
+
     } else if (strncmp(buffer, "/read ", 6) == 0) {
         char *filename = buffer + 6;
         filename[strcspn(filename, "\r\n")] = 0;
-        handle_read(client_fd, filename);
+        handle_read(client->fd, filename);
+
     } else if (strncmp(buffer, "/search ", 8) == 0) {
         char *keyword = buffer + 8;
         keyword[strcspn(keyword, "\r\n")] = 0;
-        handle_search(client_fd, keyword);
+        handle_search(client->fd, keyword);
+
     } else if (strncmp(buffer, "/info ", 6) == 0) {
         char *filename = buffer + 6;
         filename[strcspn(filename, "\r\n")] = 0;
-        handle_info(client_fd, filename);
+        handle_info(client->fd, filename);
+
     } else if (strncmp(buffer, "/delete ", 8) == 0) {
         char *filename = buffer + 8;
         filename[strcspn(filename, "\r\n")] = 0;
-        handle_delete(client_fd, filename);
-    }
-else {
+
+        if (!client->is_admin) {
+            char *msg = "ERROR: permission denied\n";
+            send(client->fd, msg, (int)strlen(msg), 0);
+        } else {
+            handle_delete(client->fd, filename);
+        }
+
+    } else {
         char *msg = "Unknown command\n";
-        send(client_fd, msg, (int)strlen(msg), 0);
+        send(client->fd, msg, (int)strlen(msg), 0);
     }
 }
 
@@ -318,7 +340,7 @@ int main() {
                     printf("%s:%d -> %s\n", ip, port, buffer);
                     saveMessage(ip, port, buffer);
 
-                    handle_command(clients[i].fd, buffer);
+                    handle_command(&clients[i], buffer);
                 }
             }
         }
