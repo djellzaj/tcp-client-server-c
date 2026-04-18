@@ -153,24 +153,31 @@ void handle_read(SOCKET client_fd, char *filename) {
     char path[512];
     snprintf(path, sizeof(path), "server_storage/%s", filename);
 
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "rb");
     if (f == NULL) {
         char *msg = "ERROR: file not found\n";
         send(client_fd, msg, (int)strlen(msg), 0);
         return;
     }
 
-    char response[4096];
-    size_t bytes_read = fread(response, 1, sizeof(response) - 1, f);
-    response[bytes_read] = '\0';
+    char buffer[BUFFER_SIZE];
+    size_t bytes_read;
+    int total_sent = 0;
+
+    while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, f)) > 0) {
+        if (send_all(client_fd, buffer, (int)bytes_read) == -1) {
+            fclose(f);
+            return;
+        }
+        total_sent += (int)bytes_read;
+    }
 
     fclose(f);
 
-    if (bytes_read == 0) {
-        strcpy(response, "File is empty\n");
+    if (total_sent == 0) {
+        char *msg = "File is empty\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
     }
-
-    send(client_fd, response, (int)strlen(response), 0);
 }
 
 void handle_search(SOCKET client_fd, char *keyword) {
