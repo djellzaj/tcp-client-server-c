@@ -629,14 +629,14 @@ int main() {
                 send(client_fd, msg, (int)strlen(msg), 0);
                 closesocket(client_fd);
             } else {
-    if (clients[idx].is_admin) {
-        char *msg = "Connected as ADMIN\n";
-        send(client_fd, msg, (int)strlen(msg), 0);
-    } else {
-        char *msg = "Connected as USER\n";
-        send(client_fd, msg, (int)strlen(msg), 0);
-    }
-}
+                if (clients[idx].is_admin) {
+                    char *msg = "Connected as ADMIN - full access (read, write, delete, download, upload)\n";
+                    send(client_fd, msg, (int)strlen(msg), 0);
+                } else {
+                    char *msg = "Connected as USER - read only access (/list, /read, /search, /info)\n";
+                    send(client_fd, msg, (int)strlen(msg), 0);
+                }
+            }
         }
 
         for (int i = 0; i < MAX_CLIENTS; i++) {
