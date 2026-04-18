@@ -171,6 +171,19 @@ void handle_info(SOCKET client_fd, char *filename) {
     send(client_fd, response, (int)strlen(response), 0);
 }
 
+void handle_delete(SOCKET client_fd, char *filename) {
+    char path[512];
+    snprintf(path, sizeof(path), "server_storage/%s", filename);
+
+    if (remove(path) == 0) {
+        char *msg = "File deleted successfully\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+    } else {
+        char *msg = "ERROR: could not delete file\n";
+        send(client_fd, msg, (int)strlen(msg), 0);
+    }
+}
+
 void handle_command(SOCKET client_fd, char *buffer) {
     if (strncmp(buffer, "/list", 5) == 0) {
         handle_list(client_fd);
@@ -182,12 +195,15 @@ void handle_command(SOCKET client_fd, char *buffer) {
         char *keyword = buffer + 8;
         keyword[strcspn(keyword, "\r\n")] = 0;
         handle_search(client_fd, keyword);
-    } 
-    else if (strncmp(buffer, "/info ", 6) == 0) {
-    char *filename = buffer + 6;
-    filename[strcspn(filename, "\r\n")] = 0;
-    handle_info(client_fd, filename);
-}
+    } else if (strncmp(buffer, "/info ", 6) == 0) {
+        char *filename = buffer + 6;
+        filename[strcspn(filename, "\r\n")] = 0;
+        handle_info(client_fd, filename);
+    } else if (strncmp(buffer, "/delete ", 8) == 0) {
+        char *filename = buffer + 8;
+        filename[strcspn(filename, "\r\n")] = 0;
+        handle_delete(client_fd, filename);
+    }
 else {
         char *msg = "Unknown command\n";
         send(client_fd, msg, (int)strlen(msg), 0);
