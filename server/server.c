@@ -80,10 +80,10 @@ void removeClient(Client clients[], int i) {
     clients[i].is_admin = 0;
 }
 
-void saveMessage(char *ip, int port, char *msg) {
+void saveMessage(char *ip, int port, char *role, char *msg) {
     FILE *f = fopen("messages.txt", "a");
     if (f != NULL) {
-        fprintf(f, "%s:%d -> %s\n", ip, port, msg);
+        fprintf(f, "[%s] %s:%d -> %s\n", role, ip, port, msg);
         fclose(f);
     }
 }
@@ -652,9 +652,10 @@ int main() {
 
                     char *ip = inet_ntoa(clients[i].addr.sin_addr);
                     int port = ntohs(clients[i].addr.sin_port);
+                    char *role = clients[i].is_admin ? "ADMIN" : "USER";
 
-                  printf("%s:%d -> %s\n", ip, port, buffer);
-                    saveMessage(ip, port, buffer);
+                    printf("%s:%d -> %s\n", ip, port, buffer);
+                    saveMessage(ip, port, role, buffer);
 
                     if (!clients[i].is_admin) {
                         Sleep(USER_DELAY_MS);
