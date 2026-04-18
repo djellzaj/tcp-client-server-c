@@ -49,3 +49,16 @@ void saveMessage(char *ip, int port, char *msg) {
         fclose(f);
     }
 }
+void checkTimeout(Client clients[]) {
+    time_t now = time(NULL);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].active) {
+            if (now - clients[i].last_active > TIMEOUT) {
+                char *ip = inet_ntoa(clients[i].addr.sin_addr);
+                int port = ntohs(clients[i].addr.sin_port);
+                printf("Timeout: %s:%d\n", ip, port);
+                removeClient(clients, i);
+            }
+        }
+    }
+}
