@@ -62,3 +62,15 @@ void checkTimeout(Client clients[]) {
         }
     }
 }
+int main() {
+    int server_fd, client_fd;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t len;
+
+    Client clients[MAX_CLIENTS];
+    initClients(clients);
+
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
