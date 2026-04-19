@@ -47,7 +47,20 @@ int main() {
         }
 
         memset(buffer, 0, sizeof(buffer));
+        
+        //Leximi i pergjigjjes
+        int bytes = read(sock, buffer, sizeof(buffer));
 
+        if (bytes <= 0) {
+            printf("⚠️ Serveri u shkëput.\n");
+            break;
+        }
+
+        printf("Serveri: %s\n", buffer);
+    }
+
+    //Mbyllja e socket-it
+    close(sock);
 
     return 0;
 }
