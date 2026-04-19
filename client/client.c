@@ -1,66 +1,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
+#pragma comment(lib, "ws2_32.lib")
+
+#define SERVER_IP "192.168.1.9"
 #define PORT 8080
+#define BUFFER_SIZE 1024
+#define LINE_SIZE 1024
+#define DOWNLOAD_PREFIX "downloaded_"
 
-int main() {
-    int sock;
-    struct sockaddr_in server;
-    char message[1024];
-    char buffer[1024];
-
-    //Krijimi i socket-it
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        perror("Gabim ne krijimin e socket");
-        return -1;
-    }
-
-    //Konfigurimi
-    server.sin_family = AF_INET;
-    server.sin_port = htons(PORT);
-    server.sin_addr.s_addr = inet_addr("192.168.1.9");
-
-    // Lidhja me serverin
-    if (connect(sock, (struct sockaddr*)&server, sizeof(server)) < 0) {
-        perror("Nuk u lidh me serverin");
-        return -1;
-    }
-
-    printf("U lidh me serverin!\n");
-    printf("Shkruaj mesazhe (shkruaj 'exit' per me dal):\n");
-
-    while (1) {
-        printf("Ti: ");
-        fgets(message, sizeof(message), stdin);
-
-        // Dërgo mesazh
-        send(sock, message, strlen(message), 0);
-
-        // Nëse user shkruan "exit" → ndalo  
-        if (strncmp(message, "exit", 4) == 0) {
-            printf("Lidhja u mbyll.\n");
-            break;
+int send_all(SOCKET sock, const char *data, int length) {
+    int total_sent = 0;
+    while (total_sent < length) {
+        int sent = send(sock, data + total_sent, length - total_sent, 0);
+        if (sent == SOCKET_ERROR || sent == 0) {
+            return -1;
         }
-
-        memset(buffer, 0, sizeof(buffer));
-        
-        //Leximi i pergjigjjes
-        int bytes = read(sock, buffer, sizeof(buffer));
-
-        if (bytes <= 0) {
-            printf("⚠️ Serveri u shkëput.\n");
-            break;
-        }
-
-        printf("Serveri: %s\n", buffer);
+        total_sent += sent;
     }
-
-    //Mbyllja e socket-it
-    close(sock);
-
-    return 0;
+    return total_sent;
+}
+// Merr saktësisht length bytes
+int recv_all(SOCKET sock, char *buffer, int length) {
+    int total_received = 0;
+    while (total_received < length) {
+        int received = recv(sock, buffer + total_received, length - total_received, 0);
+        if (received <= 0) {
+            return -1;
+        }
+        total_received += received;
+    }
+    return total_received;
 }
