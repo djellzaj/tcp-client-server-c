@@ -56,7 +56,6 @@ int recv_line(SOCKET sock, char *line, int max_len) {
 
 void trim_newline(char *s) {
     s[strcspn(s, "\r\n")] = '\0';
-    // Kthen emrin bazë të file-it nga path-i
 const char *get_basename(const char *path) {
     const char *slash1 = strrchr(path, '/');
     const char *slash2 = strrchr(path, '\\');
@@ -76,8 +75,6 @@ const char *get_basename(const char *path) {
 void receive_text_response(SOCKET sock) {
     char buffer[BUFFER_SIZE + 1];
     int total = 0;
-
-    // Timeout i shkurtër për të mos ngecur
     int timeout_ms = 700;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
      while (1) {
@@ -98,8 +95,6 @@ void receive_text_response(SOCKET sock) {
     if (total == 0) {
         printf("(Nuk u mor asnje pergjigje ose pergjigjja perfundoi.)\n");
     }
-
-    // Rikthe timeout normal
     timeout_ms = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
 
@@ -161,8 +156,6 @@ int handle_upload(SOCKET sock, const char *local_path) {
     }
 
     fclose(f);
-
-    // Mesazhi final nga serveri
     memset(line, 0, sizeof(line));
     if (recv_line(sock, line, sizeof(line)) > 0) {
         printf("%s", line);
@@ -274,10 +267,8 @@ int main() {
         WSACleanup();
         return 1;
     }
-
     printf("U lidh me serverin %s:%d\n", SERVER_IP, PORT);
 
-    // Lexo mesazhin fillestar: ADMIN ose USER
     receive_text_response(sock);
 
     printf("Komandat:\n");
@@ -289,3 +280,59 @@ int main() {
     printf("  /download <filename>\n");
     printf("  /delete <filename>\n");
     printf("  exit\n\n");
+      while (1) {
+        printf(">> ");
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            break;
+        }
+
+        trim_newline(input);
+
+        if (strcmp(input, "exit") == 0) {
+            break;
+        }
+
+        if (strncmp(input, "/upload ", 8) == 0) {
+            char *local_path = input + 8;
+            while (*local_path == ' ') local_path++;
+
+            if (*local_path == '\0') {
+                printf("Perdorimi: /upload <local_path>\n");
+                continue;
+            }
+
+            handle_upload(sock, local_path);
+        }
+        else if (strncmp(input, "/download ", 10) == 0) {
+            char *filename = input + 10;
+            while (*filename == ' ') filename++;
+
+            if (*filename == '\0') {
+                printf("Perdorimi: /download <filename>\n");
+                continue;
+            }
+
+            handle_download(sock, filename);
+        }
+         else if (
+            strncmp(input, "/list", 5) == 0 ||
+            strncmp(input, "/read ", 6) == 0 ||
+            strncmp(input, "/search ", 8) == 0 ||
+            strncmp(input, "/info ", 6) == 0 ||
+            strncmp(input, "/delete ", 8) == 0
+        ) {
+            char command[LINE_SIZE + 2];
+            snprintf(command, sizeof(command), "%s\n", input);
+            handle_simple_command(sock, command);
+        }
+        else {
+            char message[LINE_SIZE + 2];
+            snprintf(message, sizeof(message), "%s\n", input);
+            handle_simple_command(sock, message);
+        }
+    }
+
+    closesocket(sock);
+    WSACleanup();
+    return 0;
+}
