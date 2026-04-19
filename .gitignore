@@ -58,4 +58,4 @@ dkms.conf
 messages.txt
 
 # server storage files
-server/server_storage/*
+server_storage/*
