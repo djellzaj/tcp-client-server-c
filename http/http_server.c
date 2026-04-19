@@ -6,7 +6,7 @@
 
 #define PORTI 8080
 #define BUFFER_SIZE 4096
-#define STATS_FILE "../shared/server_stats.txt"
+#define STATS_FILE "shared/server_stats.txt"
 
 // Funksion për të dërguar përgjigje HTTP
 void dergo_pergjigje(int client_socket, const char *status, const char *content_type, const char *body) {
