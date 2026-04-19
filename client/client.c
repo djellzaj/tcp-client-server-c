@@ -23,6 +23,7 @@ int send_all(SOCKET sock, const char *data, int length) {
     }
     return total_sent;
 }
+
 int recv_all(SOCKET sock, char *buffer, int length) {
     int total_received = 0;
     while (total_received < length) {
@@ -34,6 +35,7 @@ int recv_all(SOCKET sock, char *buffer, int length) {
     }
     return total_received;
 }
+
 int recv_line(SOCKET sock, char *line, int max_len) {
     int i = 0;
     char c;
@@ -56,6 +58,8 @@ int recv_line(SOCKET sock, char *line, int max_len) {
 
 void trim_newline(char *s) {
     s[strcspn(s, "\r\n")] = '\0';
+}
+
 const char *get_basename(const char *path) {
     const char *slash1 = strrchr(path, '/');
     const char *slash2 = strrchr(path, '\\');
@@ -76,8 +80,10 @@ void receive_text_response(SOCKET sock) {
     char buffer[BUFFER_SIZE + 1];
     int total = 0;
     int timeout_ms = 700;
+
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
-     while (1) {
+
+    while (1) {
         int bytes = recv(sock, buffer, BUFFER_SIZE, 0);
         if (bytes <= 0) {
             break;
@@ -95,6 +101,7 @@ void receive_text_response(SOCKET sock) {
     if (total == 0) {
         printf("(Nuk u mor asnje pergjigje ose pergjigjja perfundoi.)\n");
     }
+
     timeout_ms = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
 
@@ -107,7 +114,8 @@ int handle_upload(SOCKET sock, const char *local_path) {
         printf("ERROR: nuk u hap file-i lokal: %s\n", local_path);
         return -1;
     }
-     if (fseek(f, 0, SEEK_END) != 0) {
+
+    if (fseek(f, 0, SEEK_END) != 0) {
         fclose(f);
         printf("ERROR: nuk u lexua madhesia e file-it.\n");
         return -1;
@@ -139,7 +147,8 @@ int handle_upload(SOCKET sock, const char *local_path) {
         printf("ERROR: serveri nuk ktheu pergjigje per upload.\n");
         return -1;
     }
-     if (strncmp(line, "READY", 5) != 0) {
+
+    if (strncmp(line, "READY", 5) != 0) {
         printf("%s", line);
         fclose(f);
         return -1;
@@ -147,6 +156,7 @@ int handle_upload(SOCKET sock, const char *local_path) {
 
     char buffer[BUFFER_SIZE];
     size_t bytes_read;
+
     while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, f)) > 0) {
         if (send_all(sock, buffer, (int)bytes_read) == -1) {
             fclose(f);
@@ -156,6 +166,7 @@ int handle_upload(SOCKET sock, const char *local_path) {
     }
 
     fclose(f);
+
     memset(line, 0, sizeof(line));
     if (recv_line(sock, line, sizeof(line)) > 0) {
         printf("%s", line);
@@ -165,6 +176,7 @@ int handle_upload(SOCKET sock, const char *local_path) {
 
     return 0;
 }
+
 int handle_download(SOCKET sock, const char *filename) {
     char command[LINE_SIZE];
     snprintf(command, sizeof(command), "/download %s\n", filename);
@@ -181,7 +193,6 @@ int handle_download(SOCKET sock, const char *filename) {
     }
 
     if (strncmp(header, "FILE ", 5) != 0) {
-        // Mund të jetë ERROR: file not found ose permission denied
         printf("%s", header);
         return -1;
     }
@@ -193,7 +204,8 @@ int handle_download(SOCKET sock, const char *filename) {
         printf("ERROR: header i pavlefshem nga serveri.\n");
         return -1;
     }
-char output_path[512];
+
+    char output_path[512];
     snprintf(output_path, sizeof(output_path), "%s%s", DOWNLOAD_PREFIX, recv_filename);
 
     FILE *f = fopen(output_path, "wb");
@@ -223,6 +235,7 @@ char output_path[512];
     printf("Download successful -> %s (%ld bytes)\n", output_path, filesize);
     return 0;
 }
+
 void handle_simple_command(SOCKET sock, const char *command) {
     if (send_all(sock, command, (int)strlen(command)) == -1) {
         printf("ERROR: deshtoi dergimi i komandes.\n");
@@ -250,9 +263,9 @@ int main() {
         return 1;
     }
 
+    memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_por
-    t = htons(PORT);
+    server_addr.sin_port = htons(PORT);
 
     if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
         printf("IP adresa e pavlefshme.\n");
@@ -267,6 +280,7 @@ int main() {
         WSACleanup();
         return 1;
     }
+
     printf("U lidh me serverin %s:%d\n", SERVER_IP, PORT);
 
     receive_text_response(sock);
@@ -280,7 +294,8 @@ int main() {
     printf("  /download <filename>\n");
     printf("  /delete <filename>\n");
     printf("  exit\n\n");
-      while (1) {
+
+    while (1) {
         printf(">> ");
         if (fgets(input, sizeof(input), stdin) == NULL) {
             break;
@@ -294,7 +309,9 @@ int main() {
 
         if (strncmp(input, "/upload ", 8) == 0) {
             char *local_path = input + 8;
-            while (*local_path == ' ') local_path++;
+            while (*local_path == ' ') {
+                local_path++;
+            }
 
             if (*local_path == '\0') {
                 printf("Perdorimi: /upload <local_path>\n");
@@ -305,7 +322,9 @@ int main() {
         }
         else if (strncmp(input, "/download ", 10) == 0) {
             char *filename = input + 10;
-            while (*filename == ' ') filename++;
+            while (*filename == ' ') {
+                filename++;
+            }
 
             if (*filename == '\0') {
                 printf("Perdorimi: /download <filename>\n");
@@ -314,7 +333,7 @@ int main() {
 
             handle_download(sock, filename);
         }
-         else if (
+        else if (
             strncmp(input, "/list", 5) == 0 ||
             strncmp(input, "/read ", 6) == 0 ||
             strncmp(input, "/search ", 8) == 0 ||
