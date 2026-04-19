@@ -23,7 +23,6 @@ int send_all(SOCKET sock, const char *data, int length) {
     }
     return total_sent;
 }
-// Merr saktësisht length bytes
 int recv_all(SOCKET sock, char *buffer, int length) {
     int total_received = 0;
     while (total_received < length) {
@@ -55,7 +54,6 @@ int recv_line(SOCKET sock, char *line, int max_len) {
     return i;
 }
 
-// Heq \r dhe \n nga fundi
 void trim_newline(char *s) {
     s[strcspn(s, "\r\n")] = '\0';
     // Kthen emrin bazë të file-it nga path-i
@@ -75,7 +73,6 @@ const char *get_basename(const char *path) {
     return base;
 }
 
-// Lexon përgjigje tekstuale derisa të skadojë timeout i shkurtër
 void receive_text_response(SOCKET sock) {
     char buffer[BUFFER_SIZE + 1];
     int total = 0;
@@ -147,4 +144,59 @@ int handle_upload(SOCKET sock, const char *local_path) {
         printf("ERROR: serveri nuk ktheu pergjigje per upload.\n");
         return -1;
     }
-    
+     if (strncmp(line, "READY", 5) != 0) {
+        printf("%s", line);
+        fclose(f);
+        return -1;
+    }
+
+    char buffer[BUFFER_SIZE];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, f)) > 0) {
+        if (send_all(sock, buffer, (int)bytes_read) == -1) {
+            fclose(f);
+            printf("ERROR: deshtoi dergimi i permbajtjes se file-it.\n");
+            return -1;
+        }
+    }
+
+    fclose(f);
+
+    // Mesazhi final nga serveri
+    memset(line, 0, sizeof(line));
+    if (recv_line(sock, line, sizeof(line)) > 0) {
+        printf("%s", line);
+    } else {
+        printf("Upload perfundoi, por nuk u mor konfirmimi final.\n");
+    }
+
+    return 0;
+}
+int handle_download(SOCKET sock, const char *filename) {
+    char command[LINE_SIZE];
+    snprintf(command, sizeof(command), "/download %s\n", filename);
+
+    if (send_all(sock, command, (int)strlen(command)) == -1) {
+        printf("ERROR: deshtoi dergimi i komandes download.\n");
+        return -1;
+    }
+
+    char header[LINE_SIZE];
+    if (recv_line(sock, header, sizeof(header)) <= 0) {
+        printf("ERROR: serveri nuk ktheu pergjigje per download.\n");
+        return -1;
+    }
+
+    if (strncmp(header, "FILE ", 5) != 0) {
+        // Mund të jetë ERROR: file not found ose permission denied
+        printf("%s", header);
+        return -1;
+    }
+
+    char recv_filename[256];
+    long filesize = 0;
+
+    if (sscanf(header, "FILE %255s %ld", recv_filename, &filesize) != 2 || filesize < 0) {
+        printf("ERROR: header i pavlefshem nga serveri.\n");
+        return -1;
+    }
