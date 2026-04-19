@@ -83,3 +83,68 @@ void receive_text_response(SOCKET sock) {
     // Timeout i shkurtër për të mos ngecur
     int timeout_ms = 700;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
+     while (1) {
+        int bytes = recv(sock, buffer, BUFFER_SIZE, 0);
+        if (bytes <= 0) {
+            break;
+        }
+
+        buffer[bytes] = '\0';
+        printf("%s", buffer);
+        total += bytes;
+
+        if (bytes < BUFFER_SIZE) {
+            break;
+        }
+    }
+
+    if (total == 0) {
+        printf("(Nuk u mor asnje pergjigje ose pergjigjja perfundoi.)\n");
+    }
+
+    // Rikthe timeout normal
+    timeout_ms = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
+
+    printf("\n");
+}
+
+int handle_upload(SOCKET sock, const char *local_path) {
+    FILE *f = fopen(local_path, "rb");
+    if (f == NULL) {
+        printf("ERROR: nuk u hap file-i lokal: %s\n", local_path);
+        return -1;
+    }
+     if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        printf("ERROR: nuk u lexua madhesia e file-it.\n");
+        return -1;
+    }
+
+    long filesize = ftell(f);
+    if (filesize < 0) {
+        fclose(f);
+        printf("ERROR: madhesi e pavlefshme.\n");
+        return -1;
+    }
+
+    rewind(f);
+
+    const char *filename = get_basename(local_path);
+
+    char command[LINE_SIZE];
+    snprintf(command, sizeof(command), "/upload %s %ld\n", filename, filesize);
+
+    if (send_all(sock, command, (int)strlen(command)) == -1) {
+        fclose(f);
+        printf("ERROR: deshtoi dergimi i komandes upload.\n");
+        return -1;
+    }
+
+    char line[LINE_SIZE];
+    if (recv_line(sock, line, sizeof(line)) <= 0) {
+        fclose(f);
+        printf("ERROR: serveri nuk ktheu pergjigje per upload.\n");
+        return -1;
+    }
+    
