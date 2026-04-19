@@ -10,7 +10,6 @@
 #define BUFFER_SIZE 4096
 #define STATS_FILE "shared/server_stats.txt"
 
-// Funksion për përgjigje HTTP
 void dergo_pergjigje(SOCKET client_socket, const char *status, const char *content_type, const char *body) {
     char response[8192];
 
@@ -26,13 +25,15 @@ void dergo_pergjigje(SOCKET client_socket, const char *status, const char *conte
     send(client_socket, response, (int)strlen(response), 0);
 }
 
-// /
 void handle_root(SOCKET client_socket) {
-    const char *body = "Serveri HTTP eshte aktiv.";
-    dergo_pergjigje(client_socket, "200 OK", "text/plain", body);
+    const char *body =
+        "{\n"
+        "  \"message\": \"HTTP server is running\",\n"
+        "  \"endpoint\": \"/stats\"\n"
+        "}";
+    dergo_pergjigje(client_socket, "200 OK", "application/json", body);
 }
 
-// /stats
 void handle_stats(SOCKET client_socket) {
     FILE *file = fopen(STATS_FILE, "r");
 
@@ -56,17 +57,15 @@ void handle_stats(SOCKET client_socket) {
     dergo_pergjigje(client_socket, "200 OK", "application/json", body);
 }
 
-// 404
 void handle_not_found(SOCKET client_socket) {
     const char *body = "404 Not Found";
     dergo_pergjigje(client_socket, "404 Not Found", "text/plain", body);
 }
 
-// analiza e kërkesës
 void handle_request(SOCKET client_socket, const char *request) {
     if (strncmp(request, "GET /stats", 10) == 0) {
         handle_stats(client_socket);
-    } else if (strncmp(request, "GET / ", 6) == 0 || strncmp(request, "GET /HTTP", 9) == 0) {
+    } else if (strncmp(request, "GET / ", 6) == 0) {
         handle_root(client_socket);
     } else {
         handle_not_found(client_socket);
@@ -75,7 +74,10 @@ void handle_request(SOCKET client_socket, const char *request) {
 
 int main() {
     WSADATA wsa;
-    WSAStartup(MAKEWORD(2, 2), &wsa);
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        printf("WSAStartup failed\n");
+        return 1;
+    }
 
     SOCKET server_socket, client_socket;
     struct sockaddr_in server_addr, client_addr;
@@ -83,26 +85,53 @@ int main() {
     char buffer[BUFFER_SIZE];
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_socket == INVALID_SOCKET) {
+        printf("Socket error\n");
+        WSACleanup();
+        return 1;
+    }
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORTI);
 
-    bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr));
-    listen(server_socket, 5);
+    if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+        printf("Bind error on HTTP server\n");
+        closesocket(server_socket);
+        WSACleanup();
+        return 1;
+    }
+
+    if (listen(server_socket, 5) == SOCKET_ERROR) {
+        printf("Listen error on HTTP server\n");
+        closesocket(server_socket);
+        WSACleanup();
+        return 1;
+    }
 
     printf("HTTP serveri duke punuar ne portin %d...\n", PORTI);
 
     while (1) {
         client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_len);
+        if (client_socket == INVALID_SOCKET) {
+            printf("Accept error on HTTP server\n");
+            continue;
+        }
 
         char *client_ip = inet_ntoa(client_addr.sin_addr);
-        printf("\nIP: %s u lidh\n", client_ip);
+        printf("\nHTTP klienti nga IP: %s u lidh\n", client_ip);
 
         memset(buffer, 0, sizeof(buffer));
-        recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+        int received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 
-        printf("\n--- Kerkese ---\n%s\n", buffer);
+        if (received <= 0) {
+            closesocket(client_socket);
+            continue;
+        }
+
+        buffer[received] = '\0';
+
+        printf("\n--- HTTP Kerkese ---\n%s\n", buffer);
 
         handle_request(client_socket, buffer);
 

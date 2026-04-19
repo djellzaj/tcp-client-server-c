@@ -9,12 +9,16 @@
 #include <direct.h>
 #include <sys/stat.h>
 
+#pragma comment(lib, "ws2_32.lib")
+
 #define SERVER_IP "0.0.0.0"
 #define PORT 8080
 #define MAX_CLIENTS 5
 #define BUFFER_SIZE 1024
 #define TIMEOUT 30
 #define USER_DELAY_MS 200
+#define STATS_FILE "shared/server_stats.txt"
+#define MAX_LOG_MESSAGES 50
 
 int admin_assigned = 0;
 
@@ -45,6 +49,44 @@ void ensure_server_storage() {
             printf("ERROR: could not create server_storage folder\n");
         }
     }
+}
+
+void ensure_shared_folder() {
+    struct stat st = {0};
+
+    if (stat("shared", &st) == -1) {
+        if (_mkdir("shared") == 0) {
+            printf("shared folder created\n");
+        } else {
+            printf("ERROR: could not create shared folder\n");
+        }
+    }
+}
+
+void json_escape(const char *src, char *dest, size_t dest_size) {
+    size_t j = 0;
+
+    for (size_t i = 0; src[i] != '\0' && j + 2 < dest_size; i++) {
+        char c = src[i];
+
+        if (c == '\"' || c == '\\') {
+            if (j + 2 < dest_size) {
+                dest[j++] = '\\';
+                dest[j++] = c;
+            }
+        } else if (c == '\n' || c == '\r') {
+            if (j + 2 < dest_size) {
+                dest[j++] = '\\';
+                dest[j++] = 'n';
+            }
+        } else if ((unsigned char)c < 32) {
+            continue;
+        } else {
+            dest[j++] = c;
+        }
+    }
+
+    dest[j] = '\0';
 }
 
 int addClient(Client clients[], SOCKET fd, struct sockaddr_in addr) {
@@ -109,8 +151,90 @@ void saveMessage(char *ip, int port, char *role, char *msg) {
     }
 }
 
+void update_stats_file(Client clients[]) {
+    FILE *stats = fopen(STATS_FILE, "w");
+    FILE *messages = fopen("messages.txt", "r");
+
+    if (stats == NULL) {
+        printf("ERROR: could not open %s for writing\n", STATS_FILE);
+        if (messages != NULL) fclose(messages);
+        return;
+    }
+
+    int active_connections = 0;
+    int message_count = 0;
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].active) {
+            active_connections++;
+        }
+    }
+
+    fprintf(stats, "{\n");
+    fprintf(stats, "  \"active_connections\": %d,\n", active_connections);
+
+    fprintf(stats, "  \"client_ips\": [");
+    int first = 1;
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].active) {
+            char *ip = inet_ntoa(clients[i].addr.sin_addr);
+            if (!first) {
+                fprintf(stats, ", ");
+            }
+            fprintf(stats, "\"%s\"", ip);
+            first = 0;
+        }
+    }
+    fprintf(stats, "],\n");
+
+    char lines[MAX_LOG_MESSAGES][1024];
+    int stored = 0;
+
+    if (messages != NULL) {
+        char line[1024];
+
+        while (fgets(line, sizeof(line), messages) != NULL) {
+            if (stored < MAX_LOG_MESSAGES) {
+                strncpy(lines[stored], line, sizeof(lines[stored]) - 1);
+                lines[stored][sizeof(lines[stored]) - 1] = '\0';
+                stored++;
+            } else {
+                for (int i = 1; i < MAX_LOG_MESSAGES; i++) {
+                    strcpy(lines[i - 1], lines[i]);
+                }
+                strncpy(lines[MAX_LOG_MESSAGES - 1], line, sizeof(lines[0]) - 1);
+                lines[MAX_LOG_MESSAGES - 1][sizeof(lines[0]) - 1] = '\0';
+            }
+            message_count++;
+        }
+
+        fclose(messages);
+    }
+
+    fprintf(stats, "  \"message_count\": %d,\n", message_count);
+    fprintf(stats, "  \"messages\": [\n");
+
+    for (int i = 0; i < stored; i++) {
+        char escaped[2048];
+        json_escape(lines[i], escaped, sizeof(escaped));
+        fprintf(stats, "    \"%s\"", escaped);
+
+        if (i < stored - 1) {
+            fprintf(stats, ",");
+        }
+        fprintf(stats, "\n");
+    }
+
+    fprintf(stats, "  ]\n");
+    fprintf(stats, "}\n");
+
+    fclose(stats);
+}
+
 void checkTimeout(Client clients[]) {
     time_t now = time(NULL);
+    int changed = 0;
+
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (clients[i].active) {
             if (now - clients[i].last_active > TIMEOUT) {
@@ -118,8 +242,13 @@ void checkTimeout(Client clients[]) {
                 int port = ntohs(clients[i].addr.sin_port);
                 printf("Timeout: %s:%d\n", ip, port);
                 removeClient(clients, i);
+                changed = 1;
             }
         }
+    }
+
+    if (changed) {
+        update_stats_file(clients);
     }
 }
 
@@ -200,8 +329,7 @@ void handle_list(SOCKET client_fd) {
 
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
-            int written = snprintf(response + offset, sizeof(response) - offset,
-                                   "%s\n", entry->d_name);
+            int written = snprintf(response + offset, sizeof(response) - offset, "%s\n", entry->d_name);
 
             if (written < 0 || written >= (int)(sizeof(response) - offset)) {
                 break;
@@ -276,8 +404,7 @@ void handle_search(SOCKET client_fd, char *keyword) {
             strcmp(entry->d_name, "..") != 0 &&
             strstr(entry->d_name, keyword) != NULL) {
 
-            int written = snprintf(response + offset, sizeof(response) - offset,
-                                   "%s\n", entry->d_name);
+            int written = snprintf(response + offset, sizeof(response) - offset, "%s\n", entry->d_name);
 
             if (written < 0 || written >= (int)(sizeof(response) - offset)) {
                 break;
@@ -427,7 +554,7 @@ void handle_upload(Client *client, char *filename, int filesize) {
 
         if (received <= 0) {
             fclose(f);
-            remove(path); // fshi file-in e papërfunduar
+            remove(path);
             char *msg = "ERROR: upload interrupted\n";
             send(client->fd, msg, (int)strlen(msg), 0);
             return;
@@ -580,6 +707,8 @@ int main() {
     Client clients[MAX_CLIENTS];
     initClients(clients);
     ensure_server_storage();
+    ensure_shared_folder();
+    update_stats_file(clients);
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == INVALID_SOCKET) {
@@ -659,6 +788,7 @@ int main() {
                 char *msg = "Server full\n";
                 send(client_fd, msg, (int)strlen(msg), 0);
                 closesocket(client_fd);
+                update_stats_file(clients);
             } else {
                 if (clients[idx].is_admin) {
                     char *msg = "Connected as ADMIN - full access (read, write, delete, download, upload)\n";
@@ -667,6 +797,7 @@ int main() {
                     char *msg = "Connected as USER - read only access (/list, /read, /search, /info)\n";
                     send(client_fd, msg, (int)strlen(msg), 0);
                 }
+                update_stats_file(clients);
             }
         }
 
@@ -677,6 +808,7 @@ int main() {
 
                 if (bytes <= 0) {
                     removeClient(clients, i);
+                    update_stats_file(clients);
                 } else {
                     buffer[bytes] = '\0';
                     clients[i].last_active = time(NULL);
@@ -687,6 +819,7 @@ int main() {
 
                     printf("%s:%d -> %s\n", ip, port, buffer);
                     saveMessage(ip, port, role, buffer);
+                    update_stats_file(clients);
 
                     if (!clients[i].is_admin) {
                         Sleep(USER_DELAY_MS);
