@@ -35,3 +35,51 @@ int recv_all(SOCKET sock, char *buffer, int length) {
     }
     return total_received;
 }
+int recv_line(SOCKET sock, char *line, int max_len) {
+    int i = 0;
+    char c;
+
+    while (i < max_len - 1) {
+        int n = recv(sock, &c, 1, 0);
+        if (n <= 0) {
+            return -1;
+        }
+
+        line[i++] = c;
+        if (c == '\n') {
+            break;
+        }
+    }
+
+    line[i] = '\0';
+    return i;
+}
+
+// Heq \r dhe \n nga fundi
+void trim_newline(char *s) {
+    s[strcspn(s, "\r\n")] = '\0';
+    // Kthen emrin bazë të file-it nga path-i
+const char *get_basename(const char *path) {
+    const char *slash1 = strrchr(path, '/');
+    const char *slash2 = strrchr(path, '\\');
+    const char *base = path;
+
+    if (slash1 && slash2) {
+        base = (slash1 > slash2) ? slash1 + 1 : slash2 + 1;
+    } else if (slash1) {
+        base = slash1 + 1;
+    } else if (slash2) {
+        base = slash2 + 1;
+    }
+
+    return base;
+}
+
+// Lexon përgjigje tekstuale derisa të skadojë timeout i shkurtër
+void receive_text_response(SOCKET sock) {
+    char buffer[BUFFER_SIZE + 1];
+    int total = 0;
+
+    // Timeout i shkurtër për të mos ngecur
+    int timeout_ms = 700;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
