@@ -200,3 +200,92 @@ int handle_download(SOCKET sock, const char *filename) {
         printf("ERROR: header i pavlefshem nga serveri.\n");
         return -1;
     }
+char output_path[512];
+    snprintf(output_path, sizeof(output_path), "%s%s", DOWNLOAD_PREFIX, recv_filename);
+
+    FILE *f = fopen(output_path, "wb");
+    if (f == NULL) {
+        printf("ERROR: nuk u krijua file-i lokal %s\n", output_path);
+        return -1;
+    }
+
+    char buffer[BUFFER_SIZE];
+    long remaining = filesize;
+
+    while (remaining > 0) {
+        int chunk = (remaining > BUFFER_SIZE) ? BUFFER_SIZE : (int)remaining;
+        int bytes = recv(sock, buffer, chunk, 0);
+
+        if (bytes <= 0) {
+            fclose(f);
+            printf("ERROR: download u nderpre.\n");
+            return -1;
+        }
+
+        fwrite(buffer, 1, bytes, f);
+        remaining -= bytes;
+    }
+
+    fclose(f);
+    printf("Download successful -> %s (%ld bytes)\n", output_path, filesize);
+    return 0;
+}
+void handle_simple_command(SOCKET sock, const char *command) {
+    if (send_all(sock, command, (int)strlen(command)) == -1) {
+        printf("ERROR: deshtoi dergimi i komandes.\n");
+        return;
+    }
+
+    receive_text_response(sock);
+}
+
+int main() {
+    WSADATA wsa;
+    SOCKET sock;
+    struct sockaddr_in server_addr;
+    char input[LINE_SIZE];
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        printf("WSAStartup failed.\n");
+        return 1;
+    }
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == INVALID_SOCKET) {
+        printf("Gabim ne krijimin e socket-it.\n");
+        WSACleanup();
+        return 1;
+    }
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_por
+    t = htons(PORT);
+
+    if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
+        printf("IP adresa e pavlefshme.\n");
+        closesocket(sock);
+        WSACleanup();
+        return 1;
+    }
+
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+        printf("Nuk u lidh me serverin.\n");
+        closesocket(sock);
+        WSACleanup();
+        return 1;
+    }
+
+    printf("U lidh me serverin %s:%d\n", SERVER_IP, PORT);
+
+    // Lexo mesazhin fillestar: ADMIN ose USER
+    receive_text_response(sock);
+
+    printf("Komandat:\n");
+    printf("  /list\n");
+    printf("  /read <filename>\n");
+    printf("  /search <keyword>\n");
+    printf("  /info <filename>\n");
+    printf("  /upload <local_path>\n");
+    printf("  /download <filename>\n");
+    printf("  /delete <filename>\n");
+    printf("  exit\n\n");
